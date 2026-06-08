@@ -140,7 +140,6 @@ fun WifiScreen(
         }
     }
 
-    // ----- Dialog de connexion -----
     val net = selectedNet
     if (net != null) {
         AlertDialog(
@@ -207,6 +206,7 @@ fun WifiScreen(
                             ssid = net.ssid,
                             password = password,
                             secured = net.secured,
+                            isWpa3 = net.isWpa3,
                             onConnected = {
                                 connecting = false
                                 onConnected(net.ssid)
@@ -250,7 +250,7 @@ private fun NetworkRow(net: WifiNet, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(net.ssid, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             Text(
-                "${net.level} dBm · ${if (net.secured) "Sécurisé" else "Ouvert"}",
+                "${net.level} dBm · ${if (net.isWpa3) "WPA3" else if (net.secured) "WPA2" else "Ouvert"}",
                 color = Color(0xFF888888),
                 fontSize = 12.sp
             )
