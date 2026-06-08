@@ -10,12 +10,12 @@ import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
-import androidx.annotation.RequiresApi
 
 data class WifiNet(
     val ssid: String,
-    val level: Int,        // dBm
-    val secured: Boolean
+    val level: Int,
+    val secured: Boolean,
+    val isWpa3: Boolean
 )
 
 class WifiConnector(private val context: Context) {
@@ -39,7 +39,8 @@ class WifiConnector(private val context: Context) {
                     WifiNet(
                         ssid = it.SSID,
                         level = it.level,
-                        secured = isSecured(it)
+                        secured = isSecured(it),
+                        isWpa3 = it.capabilities.contains("SAE")
                     )
                 }
         } catch (e: SecurityException) {
@@ -49,28 +50,26 @@ class WifiConnector(private val context: Context) {
 
     private fun isSecured(s: ScanResult): Boolean {
         val caps = s.capabilities
-        return caps.contains("WPA") || caps.contains("WEP") || caps.contains("PSK") || caps.contains("EAP")
+        return caps.contains("WPA") || caps.contains("WEP") || caps.contains("PSK") || caps.contains("EAP") || caps.contains("SAE")
     }
 
-    /**
-     * Connecte le téléphone au réseau WiFi donné.
-     * Sur Android 10+, Android affiche un dialog système pour que l'utilisateur confirme.
-     * Une fois connecté, onConnected(network) est appelé. Le trafic de l'app est
-     * automatiquement routé via ce réseau (binding).
-     */
-    @RequiresApi(Build.VERSION_CODES.Q)
     fun connect(
         ssid: String,
         password: String,
         secured: Boolean,
+        isWpa3: Boolean,
         onConnected: () -> Unit,
         onError: (String) -> Unit
     ) {
-        disconnect() // ferme toute connexion en cours
+        disconnect()
 
         val specifierBuilder = WifiNetworkSpecifier.Builder().setSsid(ssid)
         if (secured && password.isNotBlank()) {
-            specifierBuilder.setWpa2Passphrase(password)
+            if (isWpa3 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                specifierBuilder.setWpa3Passphrase(password)
+            } else {
+                specifierBuilder.setWpa2Passphrase(password)
+            }
         }
         val specifier = specifierBuilder.build()
 
@@ -86,7 +85,7 @@ class WifiConnector(private val context: Context) {
                 onConnected()
             }
             override fun onUnavailable() {
-                onError("Connexion impossible (mauvais mot de passe ou réseau hors de portée)")
+                onError("Connexion impossible. Vérifie le mot de passe et réessaie.")
             }
             override fun onLost(network: Network) {
                 connectivityManager.bindProcessToNetwork(null)
@@ -95,7 +94,7 @@ class WifiConnector(private val context: Context) {
         currentCallback = callback
 
         try {
-            connectivityManager.requestNetwork(request, callback, 30_000)
+            connectivityManager.requestNetwork(request, callback, 45_000)
         } catch (e: Exception) {
             onError("Erreur : ${e.message}")
         }
